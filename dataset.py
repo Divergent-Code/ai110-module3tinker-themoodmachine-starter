@@ -4,8 +4,11 @@ Shared data for the Mood Machine lab.
 This file defines:
   - POSITIVE_WORDS: starter list of positive words
   - NEGATIVE_WORDS: starter list of negative words
-  - SAMPLE_POSTS: short example posts for evaluation and training
+  - INTENSIFIER_WORDS: words that amplify the next sentiment word
+  - SAMPLE_POSTS: short example posts for training and development
   - TRUE_LABELS: human labels for each post in SAMPLE_POSTS
+  - TEST_POSTS: held-out posts never seen during development
+  - TEST_LABELS: human labels for each post in TEST_POSTS
 """
 
 # ---------------------------------------------------------------------
@@ -34,6 +37,12 @@ POSITIVE_WORDS = [
     "hyped",        # slang: very excited
     "blessed",
     "peaceful",
+    # --- slang additions (#8 improvement) ---
+    "lit",          # slang: exciting or excellent
+    "fire",         # slang: very good
+    "goat",         # slang: greatest of all time
+    "vibing",       # slang: feeling good
+    "valid",        # slang: good, acceptable
 ]
 
 NEGATIVE_WORDS = [
@@ -58,6 +67,31 @@ NEGATIVE_WORDS = [
     "overwhelmed",
     "annoyed",
     "rough",        # colloquial: "rough day"
+    # --- slang additions (#8 improvement) ---
+    "mid",          # slang: mediocre or bad
+    "sus",          # slang: suspicious or untrustworthy
+    "trash",        # slang: terrible
+    "cringe",       # slang: embarrassing or bad
+    "dead",         # slang: exhausted / overwhelmed ("I'm dead")
+]
+
+# Intensifier words that double the weight of the NEXT sentiment word.
+# Example: "absolutely love" -> love scores +2 instead of +1.
+# Example: "so stressed" -> stressed scores -2 instead of -1.
+INTENSIFIER_WORDS = [
+    "so",
+    "very",
+    "really",
+    "absolutely",
+    "totally",
+    "completely",
+    "extremely",
+    "super",
+    "incredibly",
+    "literally",    # colloquial intensifier
+    "honestly",     # colloquial intensifier
+    "lowkey",       # slang: somewhat / really (context-dependent)
+    "highkey",      # slang: openly / very much
 ]
 
 # ---------------------------------------------------------------------
@@ -138,3 +172,27 @@ TRUE_LABELS = [
 #
 # Remember to keep them aligned:
 #   len(SAMPLE_POSTS) == len(TRUE_LABELS)
+
+# ---------------------------------------------------------------------
+# Held-out test set (#8 improvement: real test split)
+# ---------------------------------------------------------------------
+# These posts are NEVER used during development or training.
+# Evaluate both models here to get a fairer accuracy estimate.
+
+TEST_POSTS = [
+    "I feel so grateful for everything today",   # intensifier: so + positive
+    "That exam was absolutely trash",             # slang: trash = negative
+    "Not really excited but not sad either",      # negation + mixed
+    "This new song is fire",                      # slang: fire = positive
+    "Feeling kind of mid about the whole thing", # slang: mid = negative
+    "Won the competition and I am so proud",      # intensifier: so + positive
+]
+
+TEST_LABELS = [
+    "positive",  # "I feel so grateful for everything today"
+    "negative",  # "That exam was absolutely trash"
+    "mixed",     # "Not really excited but not sad either"
+    "positive",  # "This new song is fire"
+    "negative",  # "Feeling kind of mid about the whole thing"
+    "positive",  # "Won the competition and I am so proud"
+]

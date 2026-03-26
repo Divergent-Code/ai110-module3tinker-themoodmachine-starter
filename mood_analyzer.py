@@ -13,7 +13,7 @@ import re
 import string
 from typing import List, Dict, Tuple, Optional
 
-from dataset import POSITIVE_WORDS, NEGATIVE_WORDS
+from dataset import POSITIVE_WORDS, NEGATIVE_WORDS, INTENSIFIER_WORDS
 
 # ---------------------------------------------------------------------------
 # Emoji lookup tables
@@ -64,14 +64,17 @@ class MoodAnalyzer:
         self,
         positive_words: Optional[List[str]] = None,
         negative_words: Optional[List[str]] = None,
+        intensifier_words: Optional[List[str]] = None,
     ) -> None:
         # Use the default lists from dataset.py if none are provided.
         positive_words = positive_words if positive_words is not None else POSITIVE_WORDS
         negative_words = negative_words if negative_words is not None else NEGATIVE_WORDS
+        intensifier_words = intensifier_words if intensifier_words is not None else INTENSIFIER_WORDS
 
         # Store as sets for faster lookup.
         self.positive_words = set(w.lower() for w in positive_words)
         self.negative_words = set(w.lower() for w in negative_words)
+        self.intensifier_words = set(w.lower() for w in intensifier_words)
 
     # ---------------------------------------------------------------------
     # Preprocessing
@@ -155,6 +158,10 @@ class MoodAnalyzer:
         The improvements implemented here are:
           - Negation handling: "not happy" flips the score of "happy" from +1 to -1.
             Negator words are: not, never, no, can't, don't, won't.
+          - Extended negation window (#8 improvement): the negation flag survives
+            one non-sentiment token, so "not at all happy" still negates "happy".
+          - Intensifiers (#8 improvement): words like "so", "very", "absolutely"
+            double the score of the immediately following sentiment word.
           - Emoji signals: ASCII/Unicode emoji sentinels count double (+2 / -2)
             so they have a stronger influence than a single content word.
 
@@ -166,36 +173,64 @@ class MoodAnalyzer:
         """
         tokens = self.preprocess(text)
         score = 0
-        negated = False  # True when the previous token was a negator.
+        negated = False         # True when we are inside a negation window.
+        negation_budget = 0     # How many non-sentiment tokens the window can skip.
+        intensified = False     # True when the previous token was an intensifier.
 
         for token in tokens:
             # --- Emoji sentinels: strong positive or negative signal.
             if token == "__emoji_positive__":
-                score += 2 if not negated else -2
+                weight = 2
+                if intensified:
+                    weight *= 2
+                score += -weight if negated else weight
                 negated = False
+                negation_budget = 0
+                intensified = False
                 continue
             if token == "__emoji_negative__":
-                score += -2 if not negated else 2
+                weight = 2
+                if intensified:
+                    weight *= 2
+                score += weight if negated else -weight
                 negated = False
+                negation_budget = 0
+                intensified = False
                 continue
 
-            # --- Negator words: set the flag; don't score the negator itself.
+            # --- Negator words: open a 2-word negation window.
             if token in _NEGATORS:
                 negated = True
+                negation_budget = 2  # can skip up to 2 non-sentiment tokens
+                intensified = False
                 continue
 
-            # --- Sentiment words: flip sign when negated.
+            # --- Intensifier words: set flag, don't score.
+            if token in self.intensifier_words:
+                intensified = True
+                # Intensifiers don't consume the negation window.
+                continue
+
+            # --- Sentiment words: apply negation + intensification.
             if token in self.positive_words:
-                score += -1 if negated else 1
+                weight = 2 if intensified else 1
+                score += -weight if negated else weight
                 negated = False
+                negation_budget = 0
+                intensified = False
             elif token in self.negative_words:
-                score += 1 if negated else -1
+                weight = 2 if intensified else 1
+                score += weight if negated else -weight
                 negated = False
+                negation_budget = 0
+                intensified = False
             else:
-                # Non-sentiment word clears the negation window after one step
-                # only if we allow multi-word spans; here we keep negation active
-                # until the next sentiment word is consumed.
-                pass
+                # Non-sentiment, non-negator, non-intensifier token.
+                # Consume one slot of the negation window if active.
+                if negated and negation_budget > 0:
+                    negation_budget -= 1
+                    if negation_budget == 0:
+                        negated = False  # window exhausted
 
         return score
 
