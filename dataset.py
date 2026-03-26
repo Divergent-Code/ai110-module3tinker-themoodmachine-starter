@@ -23,6 +23,17 @@ POSITIVE_WORDS = [
     "chill",
     "relaxed",
     "amazing",
+    # --- expanded vocabulary ---
+    "hopeful",      # fixes the "tired but hopeful" mixed-label miss
+    "proud",
+    "grateful",
+    "wonderful",
+    "fantastic",
+    "glad",
+    "stoked",       # slang: very excited
+    "hyped",        # slang: very excited
+    "blessed",
+    "peaceful",
 ]
 
 NEGATIVE_WORDS = [
@@ -36,6 +47,17 @@ NEGATIVE_WORDS = [
     "stressed",
     "hate",
     "boring",
+    # --- expanded vocabulary ---
+    "miserable",
+    "frustrated",
+    "disappointed",
+    "lonely",
+    "worried",
+    "dread",
+    "exhausted",
+    "overwhelmed",
+    "annoyed",
+    "rough",        # colloquial: "rough day"
 ]
 
 # ---------------------------------------------------------------------
@@ -50,6 +72,21 @@ SAMPLE_POSTS = [
     "This is fine",
     "So excited for the weekend",
     "I am not happy about this",
+    # --- diverse additions ---
+    # Slang
+    "Lowkey stressed but highkey proud of myself",
+    "No cap this is the best day ever",
+    # Emojis (ASCII)
+    "Just got my grades back :)",
+    "Missed my bus again :(",
+    # Unicode emoji
+    "This assignment is killing me 💀",
+    # Sarcasm (hard for rule-based models — intentional edge case)
+    "I absolutely love getting stuck in traffic",
+    # Negation
+    "Not bad at all, actually enjoyed it",
+    # Mixed feelings
+    "Finally done with finals but I am so exhausted",
 ]
 
 # Human labels for each post above.
@@ -65,6 +102,15 @@ TRUE_LABELS = [
     "neutral",   # "This is fine"
     "positive",  # "So excited for the weekend"
     "negative",  # "I am not happy about this"
+    # --- diverse additions ---
+    "mixed",     # "Lowkey stressed but highkey proud of myself"
+    "positive",  # "No cap this is the best day ever" (best/ever = positive)
+    "positive",  # "Just got my grades back :)"
+    "negative",  # "Missed my bus again :("
+    "negative",  # "This assignment is killing me 💀"
+    "negative",  # "I absolutely love getting stuck in traffic" (sarcasm — model will likely predict positive; instructive miss)
+    "positive",  # "Not bad at all, actually enjoyed it"
+    "mixed",     # "Finally done with finals but I am so exhausted"
 ]
 
 # TODO: Add 5-10 more posts and labels.
