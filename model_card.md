@@ -1,166 +1,180 @@
 # Model Card: Mood Machine
 
-This model card is for the Mood Machine project, which includes **two** versions of a mood classifier:
+This model card documents the Mood Machine project, which includes **two** versions of a mood classifier:
 
-1. A **rule based model** implemented in `mood_analyzer.py`
-2. A **machine learning model** implemented in `ml_experiments.py` using scikit learn
+1. A **rule-based model** (`mood_analyzer.py`)
+2. A **machine learning model** (`ml_experiments.py`) using scikit-learn
 
 ---
 
 ## 1. Model Overview
 
 **Model type:**  
-Both models were implemented and compared: a rule-based classifier and an ML-based classifier using logistic regression.
+Both models were implemented and compared.
 
 **Intended purpose:**  
 Classify short text posts (social media messages, chat snippets) into one of four mood labels: `positive`, `negative`, `neutral`, or `mixed`.
 
-**How it works (brief):**  
-- **Rule-based**: Text is preprocessed (punctuation stripped, emojis converted to sentiment tokens, repeated characters normalized). Each token is checked against a positive-word list (+1) and a negative-word list (-1). Negation words (`not`, `never`, `don't`, etc.) flip the sign of the next sentiment word. The final numeric score maps to a label: positive, negative, neutral, or mixed (when both types of words appear and cancel out).
-- **ML model**: Each post is converted to a bag-of-words vector using `CountVectorizer`. A `LogisticRegression` classifier is then trained on those vectors and the corresponding `TRUE_LABELS`.
+**How it works (brief):**
 
+- **Rule-based**: Text is preprocessed (punctuation stripped, ASCII/Unicode emojis converted to sentiment tokens, repeated characters normalized). Each token is scored against positive (+1) and negative (−1) word lists. *Intensifier words* (`so`, `very`, `absolutely`, etc.) double the score of the next sentiment word. *Negator words* (`not`, `never`, `don't`, etc.) flip the sign of the next sentiment word, with a **2-word window** so phrases like `"not at all happy"` are handled correctly. The numeric score maps to a label: `positive`, `negative`, `neutral`, or `mixed` (when both word types cancel out).
 
+- **ML model**: Each post is converted to a feature vector — either bag-of-words (`CountVectorizer`) or weighted bag-of-words (`TfidfVectorizer`). A `LogisticRegression` classifier is trained on those vectors and `TRUE_LABELS`.
+
+---
 
 ## 2. Data
 
 **Dataset description:**  
-The dataset contains 14 posts in `SAMPLE_POSTS`, with matching labels in `TRUE_LABELS`. The original starter had 6 posts; 8 more were added to cover a wider variety of language styles.
+14 posts in `SAMPLE_POSTS` / `TRUE_LABELS` (training and development) and 6 posts in `TEST_POSTS` / `TEST_LABELS` (held-out, never seen during development). The original starter had 6 posts; 8 more were added covering slang, emojis, sarcasm, and mixed emotions.
 
 **Labeling process:**  
 Labels were chosen by reading each post and assigning the most natural human interpretation. Posts expressing only one sentiment type were labeled `positive` or `negative`. Posts where both sentiments clearly coexist were labeled `mixed`. Posts with no strong sentiment were labeled `neutral`.
 
-The hardest posts to label:
-- *"Lowkey stressed but highkey proud of myself"* — stress is negative, pride is positive; labeled `mixed`, but a human might reasonably call it `positive` overall.
-- *"I absolutely love getting stuck in traffic"* — sarcasm makes this `negative`, but without context a reader might disagree.
-- *"No cap this is the best day ever"* — labeled `positive`, but `best`/`ever` are not in the lexicon so the rule-based model cannot pick this up.
+Hardest-to-label posts:
+- *"Lowkey stressed but highkey proud of myself"* — labeled `mixed`, but could reasonably be `positive`.
+- *"I absolutely love getting stuck in traffic"* — sarcasm makes this `negative`, but the model sees `love` and predicts `positive`.
+- *"No cap this is the best day ever"* — labeled `positive`, but `best`/`ever` are not in the lexicon.
 
-**Important characteristics of your dataset:**
-
-- Contains slang (`lowkey`, `highkey`, `no cap`)
+**Important characteristics of the dataset:**
+- Contains slang: `lowkey`, `highkey`, `no cap`, `lit`, `fire`, `mid`, `sus`, `trash`
 - Includes ASCII emojis (`:)`, `:(`) and Unicode emoji (💀)
-- Includes one clear sarcasm example
+- One clear sarcasm example (instructive failure case)
 - Several mixed-feeling posts
-- Some short, ambiguous messages ("This is fine")
+- Short, ambiguous messages ("This is fine")
 
-**Possible issues with the dataset:**  
-- Very small (14 posts) — not nearly enough for reliable ML training or evaluation
-- Slight imbalance: 5 positive, 4 negative, 1 neutral, 3 mixed (mixed is underrepresented)
-- Sarcasm requires world knowledge the models don't have
-- Slang terms (`no cap`, `lowkey`) are not in any lexicon, creating blind spots
+**Possible issues:**
+- Very small (14 training posts) — insufficient for reliable ML training
+- Slight label imbalance: 5 positive, 4 negative, 1 neutral, 4 mixed
+- Sarcasm requires world knowledge neither model has
+- Slang terms outside the lexicon are invisible to the rule-based scorer
 
+---
 
+## 3. How the Rule-Based Model Works
 
-## 3. How the Rule Based Model Works
-
-**Scoring rules implemented:**
+**Scoring rules:**
 
 | Feature | Description |
 |---------|-------------|
-| Positive words | Each match → +1 to score |
-| Negative words | Each match → -1 to score |
-| Negation | `not`, `never`, `no`, `can't`, `don't`, `won't` flip the next word's sign |
-| Emoji (ASCII) | `:)`, `:D`, `=)` → `__emoji_positive__` (+2); `:(`, `>:(`, `:/` → `__emoji_negative__` (-2) |
-| Emoji (Unicode) | Detected by Unicode codepoint ranges; scored as +2 or -2 |
-| Repeated chars | `soooo` → `soo` so the word still matches the lexicon |
-| Punctuation | Stripped before lexicon lookup so `"great!"` still matches `"great"` |
-| Mixed label | Score == 0 but both positive and negative words present → `"mixed"` |
+| Positive words | Each match → +1 |
+| Negative words | Each match → −1 |
+| **Intensifiers** | `so`, `very`, `absolutely`, etc. → next sentiment word scores ×2 |
+| Negation | `not`, `never`, `don't`, etc. → flips sign of next sentiment word |
+| **Extended negation window** | Window survives up to 2 non-sentiment tokens (e.g., `"not at all happy"` → −2) |
+| Emoji (ASCII) | `:)` / `:D` → `__emoji_positive__` (+2); `:(` → `__emoji_negative__` (−2) |
+| Emoji (Unicode) | Detected by Unicode codepoint; scored ±2 |
+| Repeated chars | `soooo` → `soo` before lexicon lookup |
+| Punctuation | Stripped so `"great!"` matches `"great"` |
+| Mixed label | Score == 0 but both word types present → `"mixed"` |
 
-**Strengths of this approach:**
-- Handles negation correctly ("I am not happy" → negative)
-- Transparent: `explain()` shows exactly which words contributed and why
-- Works on any new text immediately — no training needed
-- Emoji and ASCII emoticon support adds signal that bag-of-words misses semantically
-- Generalises to unseen posts that use known vocabulary
+**Strengths:**
+- Handles negation across a 2-word window ("not at all happy" → negative)
+- Intensifiers increase sensitivity ("so stressed" → −2 instead of −1)
+- Transparent: `explain()` shows exactly which words contributed, including negated ones
+- Works on any new text immediately — no training required
+- Emoji and emoticon support adds signal not available in bag-of-words
 
-**Weaknesses of this approach:**
+**Weaknesses:**
 - Cannot detect sarcasm ("I love getting stuck in traffic" → incorrectly positive)
-- Depends on the size and quality of the word lists
-- Slang terms not in the lexicon are invisible to the scorer
-- Negation only covers one word ahead (e.g., "not at all bad" would miss "bad")
-- Cannot detect intensity or emphasis beyond the ±2 emoji weight
+- Blind to slang not in the lexicon (`best`, `ever`, `no cap`)
+- Intensifiers don't carry over across clauses
+- No intensity gradation for different negative words (hate ≈ annoyed = −1)
 
-
+---
 
 ## 4. How the ML Model Works
 
 **Features used:**  
-Bag-of-words representation using `CountVectorizer` — each post becomes a vector of word counts across the entire vocabulary.
+Two representations compared side-by-side:
+- `CountVectorizer` — raw word counts
+- `TfidfVectorizer` — word counts weighted by how unique each word is across all posts
 
 **Training data:**  
-Trained on all 14 posts in `SAMPLE_POSTS` with labels from `TRUE_LABELS`.
+`SAMPLE_POSTS` (14 posts) with labels from `TRUE_LABELS`.
 
-**Training behavior:**  
-With only 14 training examples, the model easily memorises the training data. Adding more examples — especially diverse ones — is essential before drawing any conclusions from ML accuracy. When new posts were added to the dataset, the vocabulary grew and the model had more signal to work with, but accuracy on the training set stayed at 1.00 (since it can always memorise small sets).
+**Evaluation setup:**  
+To avoid inflated accuracy from training on test data, both vectorizers are now evaluated on a separate held-out `TEST_POSTS` / `TEST_LABELS` split (6 posts).
+
+**Results:**
+
+| Vectorizer | Train acc | Test acc (held-out) |
+|------------|-----------|---------------------|
+| CountVectorizer | 1.00 | 0.50 |
+| TF-IDF | 0.93 | 0.50 |
+
+TF-IDF's lower training accuracy (0.93 vs 1.00) signals less overfitting — a more honest result. Both score 0.50 on the test set, consistent with having too few training examples for 4 classes.
 
 **Strengths and weaknesses:**
 
 | | Strength | Weakness |
-|-|----------|---------|
-| ML model | Learns patterns automatically; handles slang if seen in training | Overfits with small data; not transparent; needs a real test set |
+|-|----------|----------|
+| ML model | Learns patterns automatically; handles any vocabulary seen in training | Overfits with small data; not transparent; needs a real held-out test set for honest evaluation |
 
-
+---
 
 ## 5. Evaluation
 
-**How the models were evaluated:**  
-Both models were evaluated on all 14 labeled posts in `dataset.py` using exact-match label accuracy.
+**How models were evaluated:**  
+Both models evaluated on all 14 labeled posts in `SAMPLE_POSTS` (development accuracy) and 6 held-out posts in `TEST_POSTS` (test accuracy).
 
-**Results:**
+**Summary:**
 
-| Model | Accuracy | Correct / Total |
-|-------|----------|-----------------|
-| Rule-based | **0.71** | 10 / 14 |
-| ML (LogisticRegression) | **1.00** | 14 / 14 ⚠️ overfitted |
-
-> ⚠️ The ML model's 1.00 is inflated — it was evaluated on the same data it trained on.
+| Model | Dev accuracy | Test accuracy |
+|-------|-------------|---------------|
+| Rule-based | 0.71 (10/14) | TBD — depends on additions to `TEST_LABELS` |
+| CountVectorizer ML | 1.00 (14/14, overfitted) | 0.50 (3/6) |
+| TF-IDF ML | 0.93 (13/14) | 0.50 (3/6) |
 
 **Examples of correct predictions (rule-based):**
 
 | Post | Label | Why correct |
 |------|-------|-------------|
-| "I am not happy about this" | negative | Negation detected: `not` + `happy` → −1 |
-| "Just got my grades back :)" | positive | ASCII emoji `:)` converted to `__emoji_positive__` → +2 |
-| "Feeling tired but kind of hopeful" | mixed | `tired` (−1) + `hopeful` (+1) = 0, both present → mixed |
+| "I am not happy about this" | negative | Negation: `not` + `happy` → −1 |
+| "That was absolutely trash" | negative | Intensifier: `absolutely` + `trash` → −2 |
+| "Just got my grades back :)" | positive | ASCII emoji `:)` → +2 |
 
 **Examples of incorrect predictions (rule-based):**
 
 | Post | Predicted | True | Why wrong |
 |------|-----------|------|-----------|
-| "I absolutely love getting stuck in traffic" | positive | negative | Sarcasm — model sees `love` and scores +1 |
-| "No cap this is the best day ever" | neutral | positive | `best` and `ever` not in `POSITIVE_WORDS` |
-| "Finally done with finals but I am so exhausted" | negative | mixed | Only `exhausted` found; no balancing positive word |
+| "I absolutely love getting stuck in traffic" | positive | negative | Sarcasm — model sees `absolutely` + `love` → +2 |
+| "No cap this is the best day ever" | neutral | positive | `best`/`ever` not in lexicon |
+| "Finally done with finals but I am so exhausted" | negative | mixed | Only `exhausted` found; no positive word to balance |
 
-
+---
 
 ## 6. Limitations
 
-- **Very small dataset**: 14 posts is too few to train or meaningfully evaluate any ML model
-- **No real test set**: Both models are evaluated on the data they were trained on or designed around
-- **Sarcasm is unsolvable** for these approaches without context or a larger model
-- **Lexicon coverage**: The rule-based model is blind to any word not in `POSITIVE_WORDS` or `NEGATIVE_WORDS`
-- **No intensity scoring**: "I hate this" and "I'm slightly annoyed" get the same −1 score
-- **Short negation window**: Only the immediately next sentiment word is flipped; "not even a little happy" would score "happy" correctly but miss more complex structures
-- **Language diversity**: The models were not tested on non-English text, heavy AAVE, or other vernacular styles
+- **Very small dataset**: 14 training posts is far too few for reliable ML training or evaluation
+- **No sarcasm detection**: Rule-based model is entirely fooled by irony; ML model only handles it if trained examples cover that pattern
+- **Lexicon coverage gap**: Slang not in `POSITIVE_WORDS` / `NEGATIVE_WORDS` is invisible to the rule-based scorer (e.g., `best`, `ever`, `no cap`)
+- **Short negation scope**: The 2-word window helps but still misses longer constructions like `"not even close to being happy"`
+- **Intensifier collateral**: Intensifiers apply to the immediately next sentiment word only; `"lowkey really stressed and sad"` would only double `stressed`, not `sad`
+- **Label subjectivity**: Sarcasm and mixed-feeling posts may have multiple valid labels, creating noisy training signal
+- **Language diversity**: Models not tested on non-English text, heavy AAVE, or regional slang
 
-
+---
 
 ## 7. Ethical Considerations
 
-- **Distress misclassification**: A post expressing genuine distress through sarcasm or understated language could be classified as positive, masking a real need for support. Using mood detection for mental-health applications would require much higher reliability.
-- **Cultural and linguistic bias**: Slang, dialects, and non-standard spellings (e.g., AAVE, internet-speak) are underrepresented in the word lists. The model may systematically mis-classify posts from certain communities.
-- **Privacy**: Processing personal messages raises privacy concerns. Even an educational tool should not be applied to real user data without consent.
-- **Label subjectivity**: Human labelers may disagree on edge cases (sarcasm, mixed emotions). Any mistakes in `TRUE_LABELS` directly impact both models.
-- **Overconfidence**: The ML model's 1.00 training accuracy could mislead a user into trusting it more than it deserves.
+- **Distress misclassification**: Sarcasm about distress ("I'm totally fine 🙂") could be classified as positive, masking a real need for support. High-stakes applications (mental health, crisis detection) require far higher reliability.
+- **Cultural and linguistic bias**: Slang, dialects, and non-standard spellings are underrepresented. The model may systematically mis-classify posts from communities whose language isn't in the lexicon.
+- **Privacy**: Processing personal messages raises consent and data-handling concerns, even in educational tools.
+- **Overconfidence**: The ML model's 1.00 training accuracy could mislead users. Always report test-set accuracy.
+- **Feedback loops**: If a mood-detection system acts on predictions (e.g., content moderation), systematic misclassification could disproportionately affect certain groups.
 
-
+---
 
 ## 8. Ideas for Improvement
 
-- **Expand word lists**: Add more slang (`lit`, `fire`, `mid`, `sus`), intensifiers (`really`, `so`, `absolutely`), and domain-specific terms
-- **Add a real held-out test set**: Keep some labeled examples for evaluation only, never used in development
-- **TF-IDF instead of CountVectorizer**: Downweights common words and highlights more informative ones
-- **Better negation**: Extend the negation window to 2–3 words (`not at all happy`)
-- **Sarcasm detection**: Use irony cues or a separate classifier trained on sarcasm datasets
-- **Word embeddings**: Use pre-trained vectors (e.g., GloVe, fastText) instead of bag-of-words so unseen slang near known words still gets useful representations
-- **Transformer model**: A small pre-trained model (e.g., distilBERT fine-tuned on sentiment data) would handle context, sarcasm, and slang far better
-- **Larger dataset**: Collect and label 100+ diverse posts before drawing conclusions from accuracy numbers
+| # | Idea | Status |
+|---|------|--------|
+| 1 | Expand word lists with slang and intensifiers | ✅ Implemented |
+| 2 | Add a real held-out test set | ✅ Implemented (`TEST_POSTS` / `TEST_LABELS`) |
+| 3 | TF-IDF instead of CountVectorizer | ✅ Implemented (side-by-side comparison) |
+| 4 | Extended negation window (2-word budget) | ✅ Implemented |
+| 5 | Sarcasm detection | ⏳ Requires external sarcasm corpus |
+| 6 | Word embeddings (GloVe / fastText) | ⏳ Requires large file downloads |
+| 7 | Transformer model (distilBERT) | ⏳ Requires PyTorch + GPU/CPU compute |
+| 8 | Larger / more balanced dataset | ⏳ Ongoing — add more posts to `SAMPLE_POSTS` |
