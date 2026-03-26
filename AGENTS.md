@@ -4,19 +4,19 @@ This document provides essential information for AI coding agents working on the
 
 ## Project Overview
 
-The Mood Machine is an educational text classification project designed to teach fundamental concepts of sentiment analysis and machine learning through hands-on experimentation. The project implements **two parallel approaches** to mood classification:
+The Mood Machine is an educational text classification lab designed to teach fundamental concepts of sentiment analysis, natural language processing, and machine learning fairness. The project implements **two parallel approaches** to mood classification:
 
-1. **Rule-Based Model** (`mood_analyzer.py`): A lexicon-based classifier using predefined positive/negative word lists
-2. **ML Model** (`ml_experiments.py`): A scikit-learn classifier using bag-of-words features and logistic regression
+1. **Rule-Based Model** (`mood_analyzer.py`): A lexicon-based classifier using predefined positive/negative word lists, negation handling, intensifiers, and emoji support
+2. **ML Model** (`ml_experiments.py`): A scikit-learn classifier using bag-of-words/TF-IDF features and logistic regression
 
-The primary goal is educational: learners implement missing functionality, experiment with data, compare approaches, and document findings in a model card.
+The educational goal is to help learners understand: how basic classification systems work, where they break, how different modeling choices affect fairness and accuracy, and how to document model behavior through a model card.
 
 ## Technology Stack
 
-- **Language**: Python 3.13+
-- **Core Dependencies**:
+- **Language**: Python 3.x
+- **Core Dependencies** (from `requirements.txt`):
   - `scikit-learn` - Machine learning library for the ML model
-  - `matplotlib` - Visualization (optional for extended experiments)
+  - `matplotlib` - Visualization utilities
   - `ipykernel` - Jupyter notebook support (optional)
 - **Virtual Environment**: `.venv` directory (pre-configured)
 
@@ -26,35 +26,36 @@ The primary goal is educational: learners implement missing functionality, exper
 .
 ├── AGENTS.md              # This file - guidance for AI agents
 ├── README.md              # Human-facing project documentation
-├── model_card.md          # Template for documenting model findings
+├── model_card.md          # Detailed model documentation with findings
+├── Phase_1_Implementation_Plan.md  # Implementation planning document
 ├── requirements.txt       # Python dependencies
-├── dataset.py             # Shared data: word lists and labeled examples
-├── mood_analyzer.py       # Rule-based classifier (has TODOs to implement)
+├── dataset.py             # Shared data: word lists, labeled examples, test set
+├── mood_analyzer.py       # Rule-based classifier (fully implemented)
 ├── ml_experiments.py      # ML classifier implementation (complete)
 └── main.py                # Entry point - runs evaluation and interactive demo
 ```
 
 ### Module Responsibilities
 
-| File | Purpose | Status |
-|------|---------|--------|
-| `dataset.py` | Defines `POSITIVE_WORDS`, `NEGATIVE_WORDS`, `SAMPLE_POSTS`, and `TRUE_LABELS` | Needs expansion (TODO present) |
-| `mood_analyzer.py` | `MoodAnalyzer` class with `preprocess()`, `score_text()`, `predict_label()`, and `explain()` methods | Has TODOs to implement |
-| `ml_experiments.py` | ML training pipeline using scikit-learn | Complete, functional |
-| `main.py` | Evaluation functions and interactive demo runner | Complete, functional |
+| File | Purpose |
+|------|---------|
+| `dataset.py` | Defines `POSITIVE_WORDS`, `NEGATIVE_WORDS`, `INTENSIFIER_WORDS`, `SAMPLE_POSTS` (14 posts), `TRUE_LABELS`, `TEST_POSTS` (6 posts), and `TEST_LABELS` |
+| `mood_analyzer.py` | `MoodAnalyzer` class with full preprocessing, scoring, prediction, and explanation capabilities |
+| `ml_experiments.py` | ML training pipeline with CountVectorizer and TfidfVectorizer comparison |
+| `main.py` | Rule-based evaluation, batch demo, and interactive mode |
 
 ## Build and Run Commands
 
 ### Environment Setup
 
 ```bash
-# Activate the virtual environment (Windows PowerShell)
+# Windows PowerShell
 .venv\Scripts\Activate.ps1
 
 # Or on Unix/macOS
 source .venv/bin/activate
 
-# Install dependencies (if not already installed)
+# Install dependencies
 pip install -r requirements.txt
 ```
 
@@ -64,120 +65,140 @@ pip install -r requirements.txt
 # Run the rule-based model (main entry point)
 python main.py
 
-# Run the ML experiments
+# Run the ML experiments with side-by-side comparison
 python ml_experiments.py
 ```
 
 ### What Happens When You Run `main.py`
 
-1. **Evaluation Phase**: Tests the rule-based model against `SAMPLE_POSTS` and reports accuracy
-2. **Batch Demo**: Shows predictions for all sample posts
-3. **Interactive Mode**: Prompts for user input to test custom sentences
+1. **Evaluation Phase**: Tests the rule-based model against `SAMPLE_POSTS` with `TRUE_LABELS` and reports accuracy
+2. **Batch Demo**: Shows predictions for all sample posts without labels
+3. **Interactive Mode**: Prompts for user input to test custom sentences (type 'quit' or press Enter to exit)
+
+### What Happens When You Run `ml_experiments.py`
+
+1. Trains two models (CountVectorizer and TfidfVectorizer) on `SAMPLE_POSTS`
+2. Evaluates each on training data and held-out `TEST_POSTS`
+3. Displays comparison summary with train/test accuracy
+4. Starts interactive mode using the TF-IDF model
 
 ## Code Organization and Architecture
 
 ### Data Flow
 
 ```
-dataset.py
+dataset.py (word lists + labeled data)
     ↓
-mood_analyzer.py  ←→  ml_experiments.py
-    ↓                      ↓
-main.py (evaluation)   ml_experiments.py (training & evaluation)
+mood_analyzer.py ←→ ml_experiments.py
+    ↓                       ↓
+main.py (rule-based)    (ML-based)
 ```
 
 ### Label System
 
 The project supports four mood labels:
-- `"positive"` - Expresses positive sentiment
-- `"negative"` - Expresses negative sentiment
-- `"neutral"` - No strong sentiment
-- `"mixed"` - Contains both positive and negative elements
+- `"positive"` - Score > 0 (expresses positive sentiment)
+- `"negative"` - Score < 0 (expresses negative sentiment)
+- `"neutral"` - Score == 0, no sentiment words found
+- `"mixed"` - Score == 0, but both positive and negative words present
 
-Labels are defined in `TRUE_LABELS` (in `dataset.py`) and must align with `SAMPLE_POSTS` entries.
+### Rule-Based Model Features
 
-### Rule-Based Model Architecture
+The `MoodAnalyzer` class implements:
 
-```python
-class MoodAnalyzer:
-    - __init__(positive_words, negative_words)  # Uses dataset.py defaults
-    - preprocess(text) → List[str]              # Tokenization (TODO: improve)
-    - score_text(text) → int                    # Calculate sentiment score (TODO: implement)
-    - predict_label(text) → str                 # Map score to label (TODO: implement)
-    - explain(text) → str                       # Show reasoning (partially implemented)
-```
+| Feature | Description |
+|---------|-------------|
+| Preprocessing | ASCII/Unicode emoji handling, punctuation stripping, repeated character normalization |
+| Scoring | Positive words (+1), negative words (-1), emoji sentinels (±2) |
+| Negation | Flips sentiment of next word; 2-word window for phrases like "not at all happy" |
+| Intensifiers | Doubles score of next sentiment word (so, very, absolutely, etc.) |
+| Label Mapping | Score → positive/negative/neutral/mixed based on thresholds |
+| Explanation | Shows contributing words, negated words, and final score |
 
-### ML Model Architecture
+### ML Model Features
 
-```python
-# Feature extraction
-CountVectorizer() → Bag-of-words representation
+- **Vectorizers**: `CountVectorizer` (raw counts) and `TfidfVectorizer` (weighted)
+- **Classifier**: `LogisticRegression(max_iter=1000)`
+- **Evaluation**: Train accuracy (on SAMPLE_POSTS) and test accuracy (on held-out TEST_POSTS)
 
-# Classification
-LogisticRegression(max_iter=1000) → Multi-class classifier
-```
+## Dataset Structure
 
-## Key Implementation Tasks (TODOs)
+### Training/Development Set (`SAMPLE_POSTS` / `TRUE_LABELS`)
+- 14 posts covering diverse language patterns
+- Includes: slang (lowkey, highkey, no cap), emojis (ASCII and Unicode), sarcasm, negation, mixed emotions
 
-The following tasks are explicitly marked as TODOs in the codebase:
+### Held-out Test Set (`TEST_POSTS` / `TEST_LABELS`)
+- 6 posts never used during development
+- Used for fair evaluation of both models
 
-### In `dataset.py`:
-- Add 5-10 more posts to `SAMPLE_POSTS` with matching `TRUE_LABELS`
-- Include diverse language: slang, emojis, sarcasm, mixed emotions
-
-### In `mood_analyzer.py`:
-1. **Preprocessing Improvements**: Remove punctuation, handle emojis, normalize repeated characters ("soooo" → "soo")
-2. **Scoring Logic**: Implement word counting, handle negation ("not happy"), weight different words, handle emojis/slang
-3. **Label Prediction**: Map scores to labels (may adjust thresholds for "mixed" category)
-4. **Explanation Enhancement**: Show which words contributed to the score
+### Word Lists (from `dataset.py`)
+- `POSITIVE_WORDS`: 25 words including standard and slang terms (lit, fire, goat, vibing, valid)
+- `NEGATIVE_WORDS`: 25 words including standard and slang terms (mid, sus, trash, cringe, dead)
+- `INTENSIFIER_WORDS`: 13 words (so, very, really, absolutely, literally, lowkey, highkey, etc.)
 
 ## Development Conventions
 
 ### Coding Style
 
 - **Type Hints**: All functions use Python type annotations (e.g., `def func(text: str) -> int:`)
-- **Docstrings**: Google-style docstrings explaining parameters, returns, and behavior
-- **Naming**: snake_case for functions/variables, PascalCase for classes
-- **Comments**: Extensive inline comments and TODO markers for educational clarity
+- **Docstrings**: Google-style docstrings with Args/Returns sections
+- **Naming**: `snake_case` for functions/variables, `PascalCase` for classes, `UPPER_CASE` for module-level constants
+- **Constants**: Word lists are module-level constants; private module variables use `_leading_underscore`
+- **Comments**: Extensive inline comments explaining implementation decisions
 
-### File Patterns
+### Key Code Patterns
 
-- No complex build system - direct Python execution
-- No test suite - evaluation is done against labeled dataset
-- No linting configuration - keep code simple and readable
+```python
+# Type aliases for flexibility
+Vectorizer = Union[CountVectorizer, TfidfVectorizer]
+
+# Sentinel tokens for emojis
+_ASCII_EMOJI_MAP: Dict[str, str] = {
+    ":)": "__emoji_positive__",
+    ":(": "__emoji_negative__",
+    # ...
+}
+
+# Negator set for O(1) lookup
+_NEGATORS = {"not", "never", "no", "cant", "can't", "dont", "don't", "wont", "won't"}
+```
 
 ## Testing Strategy
 
-There is no formal test suite. Instead, the project uses:
+There is no formal test suite. Evaluation is performed through:
 
-1. **Labeled Dataset Evaluation**: `evaluate_rule_based()` and `evaluate_on_dataset()` functions compare predictions against `TRUE_LABELS`
-2. **Interactive Testing**: Users can type custom sentences to observe model behavior
-3. **Model Card Documentation**: Learners document strengths, weaknesses, and failure cases
+1. **Labeled Dataset Evaluation**: 
+   - `evaluate_rule_based()` in `main.py` computes accuracy against `TRUE_LABELS`
+   - `evaluate_on_dataset()` in `ml_experiments.py` uses sklearn's `accuracy_score`
 
-### Expected Workflow for Development
+2. **Interactive Testing**: Both entry points provide interactive modes for manual testing
 
-1. Implement TODOs in `mood_analyzer.py`
-2. Run `python main.py` to see evaluation results
-3. Add more data to `dataset.py` to test edge cases
-4. Run `python ml_experiments.py` to compare approaches
-5. Document findings in `model_card.md`
+3. **Model Card Documentation**: Comprehensive documentation of findings, limitations, and ethical considerations in `model_card.md`
 
-## Common Failure Modes to Consider
+### Expected Accuracy (Current Implementation)
 
-When implementing improvements, learners should test against these known challenges:
+| Model | Dev Accuracy | Test Accuracy |
+|-------|-------------|---------------|
+| Rule-based | ~0.71 (10/14) | Varies by implementation |
+| CountVectorizer ML | 1.00 (14/14) | 0.50 (3/6) |
+| TF-IDF ML | 0.93 (13/14) | 0.50 (3/6) |
 
-- **Sarcasm**: "I absolutely love getting stuck in traffic"
-- **Negation**: "I am not happy about this" (currently in dataset)
-- **Mixed emotions**: "Feeling tired but kind of hopeful" (currently in dataset)
-- **Emojis**: ":)", ":(", "🥲", "😂", "💀"
-- **Slang**: "lowkey", "highkey", "no cap"
-- **Repeated letters**: "soooo happy", "terribleee"
+## Known Failure Modes and Edge Cases
+
+The models struggle with these challenging cases (documented in model_card.md):
+
+| Case | Example | Issue |
+|------|---------|-------|
+| Sarcasm | "I absolutely love getting stuck in traffic" | Model sees positive words, misses irony |
+| Slang gaps | "No cap this is the best day ever" | "best"/"ever" not in lexicon |
+| Mixed feelings | "Finally done with finals but I am so exhausted" | Only negative words detected |
+| Short ambiguous | "This is fine" | Hard to classify even for humans |
 
 ## Dependencies and External Resources
 
-- **scikit-learn**: Used for `CountVectorizer`, `LogisticRegression`, and `accuracy_score`
-- **matplotlib**: Available for visualization extensions (not used in starter code)
-- **Standard Library Only**: Rule-based model uses only Python standard library
+- **scikit-learn**: Used for vectorizers, LogisticRegression, and metrics
+- **matplotlib**: Available for visualization (not currently used in main scripts)
+- **Standard Library Only**: Rule-based model uses `re`, `string`, `typing` only
 
 ## Security Considerations
 
@@ -190,9 +211,10 @@ When implementing improvements, learners should test against these known challen
 
 When assisting with this project:
 
-1. **Preserve the TODO Structure**: Don't remove TODO comments - they guide learners
-2. **Maintain Educational Value**: Keep code readable with comments
+1. **Preserve Documentation**: Keep docstrings and comments that explain educational concepts
+2. **Maintain Data Alignment**: Ensure `SAMPLE_POSTS` and `TRUE_LABELS` always have matching lengths
 3. **Follow Existing Patterns**: Use type hints and docstring style from existing code
 4. **Test Both Models**: When suggesting changes, consider impact on both rule-based and ML approaches
-5. **Align Data**: Ensure `SAMPLE_POSTS` and `TRUE_LABELS` always have matching lengths
-6. **Suggest Edge Cases**: Help identify challenging examples for testing
+5. **Consider Edge Cases**: Help identify challenging examples for testing (sarcasm, slang, emojis)
+6. **Update Model Card**: If making significant changes, suggest corresponding updates to `model_card.md`
+7. **Resist Over-engineering**: This is an educational project - keep solutions simple and explainable
